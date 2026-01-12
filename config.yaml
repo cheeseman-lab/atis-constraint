@@ -1,0 +1,80 @@
+# atis-constraint configuration
+
+# Data paths
+data:
+  swissisoform_dir: "data/swissisoform"  # symlink to SwissIsoform mutations folder
+  gnomad_dir: "data/gnomad"
+
+  # Main input file from SwissIsoform
+  isoform_results: "isoform_level_results_mane.csv"
+
+# Column mappings (actual column names in the data)
+columns:
+  # Identifiers
+  gene: "gene_name"
+  transcript: "transcript_id"
+  feature_id: "feature_id"
+  feature_type: "feature_type"
+
+  # Region properties
+  feature_length_aa: "feature_length_aa"
+  aa_difference: "aa_difference_from_canonical"
+
+  # gnomAD variant counts (unique variants)
+  gnomad_missense: "count_gnomad_missense_variant"
+  gnomad_synonymous: "count_gnomad_synonymous_variant"
+  gnomad_nonsense: "count_gnomad_nonsense_variant"
+  gnomad_frameshift: "count_gnomad_frameshift_variant"
+
+  # gnomAD allele counts (population frequency weighted)
+  gnomad_ac_missense: "gnomad_allele_count_missense_variant"
+  gnomad_ac_synonymous: "gnomad_allele_count_synonymous_variant"
+  gnomad_ac_nonsense: "gnomad_allele_count_nonsense_variant"
+
+  # Start site counts
+  alt_start_variants: "count_in_alt_start_site"
+  canonical_start_variants: "count_in_canonical_start_site"
+
+# Output paths
+output:
+  results_dir: "results"
+  figures_dir: "results/figures"
+
+# Analysis parameters
+analysis:
+  # Genome-wide missense to synonymous ratio (gnomAD baseline ~2.5)
+  genome_wide_mis_syn_ratio: 2.5
+
+  # Genome-wide LoF (nonsense + frameshift) to synonymous ratio
+  genome_wide_lof_syn_ratio: 0.15
+
+  # Minimum variants required for o/e calculation
+  min_variants: 5
+
+  # Confidence interval method: "poisson" or "bootstrap"
+  ci_method: "poisson"
+  ci_level: 0.95
+
+  # Bootstrap parameters (if using bootstrap CI)
+  bootstrap_iterations: 10000
+
+  # Use unique variant counts vs allele counts
+  # "unique" = count_gnomad_* (number of distinct variants)
+  # "allele" = gnomad_allele_count_* (sum of allele counts)
+  count_type: "unique"
+
+# Feature types to analyze (from feature_type column)
+feature_types:
+  - "extension"   # aTIS N-terminal extensions
+  - "truncation"  # aTIS N-terminal truncations
+
+# Stratification variables
+stratification:
+  - "feature_length_aa"
+  - "aa_difference_from_canonical"
+
+# Figure settings
+figures:
+  dpi: 300
+  format: "pdf"
+  style: "seaborn-v0_8-whitegrid"
