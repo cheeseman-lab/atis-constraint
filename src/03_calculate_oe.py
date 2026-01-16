@@ -483,23 +483,16 @@ def main(config_path: str = "config.yaml", input_path: str = None):
     extension_df.to_csv(per_feature_output, index=False)
     print(f"\nSaved per-feature O/E to: {per_feature_output}")
 
-    # 2. Most constrained features (sorted by O/E ascending)
+    # Prepare constrained features for summary
     cols = config.get("columns", {})
     gene_col = cols.get("gene", "gene_name")
     length_col = cols.get("feature_length_aa", "feature_length_aa")
 
     constrained = extension_df[extension_df["oe_missense"].notna()].copy()
     constrained = constrained.sort_values("oe_missense")
-    constrained_cols = [gene_col, "feature_type", length_col,
-                        "observed_missense", "expected_missense",
-                        "oe_missense", "oe_missense_upper"]
-    constrained_cols = [c for c in constrained_cols if c in constrained.columns]
-    constrained_output = results_dir / "most_constrained.csv"
-    constrained[constrained_cols].to_csv(constrained_output, index=False)
-    print(f"Saved ranked constraints to: {constrained_output}")
 
-    # 3. Generate summary.md
-    summary_path = results_dir / "summary.md"
+    # Note: summary.md generation removed - see *_summary.md files in results/
+    _ = """
     with open(summary_path, "w") as f:
         f.write("# aTIS Constraint Analysis Results\n\n")
 
@@ -584,6 +577,7 @@ def main(config_path: str = "config.yaml", input_path: str = None):
             f.write("\n")
 
     print(f"Saved summary to: {summary_path}")
+    """  # End of commented summary.md code
 
     return extension_df, aggregate
 
