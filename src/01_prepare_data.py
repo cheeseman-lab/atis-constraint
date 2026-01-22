@@ -1,15 +1,50 @@
 #!/usr/bin/env python3
 """
-Load SwissIsoform aTIS data and merge with gnomAD constraint metrics.
+Load SwissIsoform aTIS data and merge with gnomAD v4.1 constraint metrics.
 
-Starts from raw CSV and subsets to only essential columns.
+Downloads gnomAD v4.1 if not present, then merges with SwissIsoform features.
 
 Output: data/merged_features.csv
 """
 
-import gzip
 from pathlib import Path
 import pandas as pd
+import urllib.request
+import sys
+
+
+def download_gnomad_v4(output_path: Path) -> None:
+    """
+    Download gnomAD v4.1 constraint metrics if not present.
+
+    Parameters
+    ----------
+    output_path : Path
+        Where to save the downloaded file
+    """
+    if output_path.exists():
+        print(f"gnomAD v4.1 file already exists: {output_path}")
+        return
+
+    print("Downloading gnomAD v4.1 constraint metrics...")
+    print("  This is a ~150MB file and may take a few minutes")
+
+    url = "https://storage.googleapis.com/gcp-public-data--gnomad/release/4.1/constraint/gnomad.v4.1.constraint_metrics.tsv"
+
+    # Create parent directory if needed
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Download with progress
+    def progress_hook(block_num, block_size, total_size):
+        downloaded = block_num * block_size
+        percent = min(100, downloaded * 100 // total_size)
+        sys.stdout.write(
+            f"\r  Progress: {percent}% ({downloaded // 1_000_000}MB / {total_size // 1_000_000}MB)"
+        )
+        sys.stdout.flush()
+
+    urllib.request.urlretrieve(url, output_path, progress_hook)
+    print(f"\n✓ Downloaded to: {output_path}")
 
 
 def load_swissisoform_raw(swissisoform_file: Path) -> pd.DataFrame:
@@ -21,7 +56,7 @@ def load_swissisoform_raw(swissisoform_file: Path) -> pd.DataFrame:
     pd.DataFrame
         Features with only essential columns
     """
-    print(f"Loading raw SwissIsoform data from: {swissisoform_file}")
+    print(f"\nLoading raw SwissIsoform data from: {swissisoform_file}")
     df = pd.read_csv(swissisoform_file)
     print(f"  Loaded {len(df)} features")
     print(f"  Total columns: {len(df.columns)}")
@@ -57,7 +92,7 @@ def load_swissisoform_raw(swissisoform_file: Path) -> pd.DataFrame:
 
     # Strip version from transcript_id for gnomAD matching
     # SwissIsoform has versions (e.g., ENST00000209873.8)
-    # gnomAD doesn't (e.g., ENST00000209873)
+    # gnomAD v4.1 doesn't (e.g., ENST00000209873)
     df_subset["transcript_id_clean"] = df_subset["transcript_id"].str.split(".").str[0]
     print("  Created transcript_id_clean (version stripped)")
 
@@ -66,67 +101,67 @@ def load_swissisoform_raw(swissisoform_file: Path) -> pd.DataFrame:
 
 def load_gnomad_constraint(gnomad_file: Path) -> pd.DataFrame:
     """
-    Load gnomAD v2.1.1 constraint metrics.
+    Load gnomAD v4.1 constraint metrics.
 
     Returns
     -------
     pd.DataFrame
-        Constraint metrics per gene (canonical transcripts)
+        Constraint metrics per transcript
     """
-    print(f"\nLoading gnomAD constraint from: {gnomad_file}")
+    print(f"\nLoading gnomAD v4.1 constraint from: {gnomad_file}")
 
-    with gzip.open(gnomad_file, "rt") as f:
-        df = pd.read_csv(f, sep="\t")
+    df = pd.read_csv(gnomad_file, sep="\t")
+    print(f"  Loaded {len(df)} transcript entries")
 
-    print(f"  Loaded {len(df)} genes/transcripts")
-
-    # Essential columns only
-    essential_cols = [
-        "gene",
-        "transcript",  # Need this for merging!
+    # Map v4.1 column names to our standard names
+    # gnomAD v4.1 uses dotted names: lof.obs, mis.obs, syn.obs
+    column_mapping = {
+        "gene": "gnomad_gene",
+        "transcript": "gnomad_transcript",
+        "chromosome": "chromosome",
         # Missense
-        "obs_mis",
-        "exp_mis",
-        "oe_mis",
+        "mis.obs": "canonical_obs_mis",
+        "mis.exp": "canonical_exp_mis",
+        "mis.oe": "canonical_oe_mis",
         # Synonymous
-        "obs_syn",
-        "exp_syn",
-        "oe_syn",
+        "syn.obs": "canonical_obs_syn",
+        "syn.exp": "canonical_exp_syn",
+        "syn.oe": "canonical_oe_syn",
         # LoF
-        "obs_lof",
-        "exp_lof",
-        "oe_lof",
-        "oe_lof_upper",  # LOEUF
+        "lof.obs": "canonical_obs_lof",
+        "lof.exp": "canonical_exp_lof",
+        "lof.oe": "canonical_oe_lof",
+        "lof.oe_ci.upper": "loeuf",  # LOEUF (LoF O/E Upper bound)
         # Gene info
-        "cds_length",
-    ]
+        "cds_length": "canonical_cds_length",
+        "mane_select": "mane_select",
+        "canonical": "is_canonical",
+    }
 
-    available = [c for c in essential_cols if c in df.columns]
-    df = df[available].copy()
+    # Check which columns exist
+    available_mapping = {k: v for k, v in column_mapping.items() if k in df.columns}
+    missing = [k for k in column_mapping.keys() if k not in df.columns]
+
+    if missing:
+        print(f"  Warning: Missing expected columns: {missing}")
+
+    # Rename columns
+    df = df.rename(columns=available_mapping)
+
+    # Subset to renamed columns
+    keep_cols = list(available_mapping.values())
+    df = df[keep_cols].copy()
 
     print(f"  Subset to {len(df.columns)} essential columns")
 
-    # Add LOEUF alias
-    if "oe_lof_upper" in df.columns:
-        df["loeuf"] = df["oe_lof_upper"]
+    # Show MANE and canonical counts
+    if "mane_select" in df.columns:
+        n_mane = df["mane_select"].sum()
+        print(f"  MANE Select transcripts: {n_mane}")
 
-    # Rename with canonical_ prefix for clarity
-    df = df.rename(
-        columns={
-            "gene": "gnomad_gene",
-            "transcript": "gnomad_transcript",  # Keep for merging
-            "obs_mis": "canonical_obs_mis",
-            "exp_mis": "canonical_exp_mis",
-            "oe_mis": "canonical_oe_mis",
-            "obs_syn": "canonical_obs_syn",
-            "exp_syn": "canonical_exp_syn",
-            "oe_syn": "canonical_oe_syn",
-            "obs_lof": "canonical_obs_lof",
-            "exp_lof": "canonical_exp_lof",
-            "oe_lof": "canonical_oe_lof",
-            "cds_length": "canonical_cds_length",
-        }
-    )
+    if "is_canonical" in df.columns:
+        n_canonical = df["is_canonical"].sum()
+        print(f"  Canonical transcripts: {n_canonical}")
 
     return df
 
@@ -147,7 +182,7 @@ def merge_data(features_df: pd.DataFrame, gnomad_df: pd.DataFrame) -> pd.DataFra
     pd.DataFrame
         Merged data
     """
-    print("\nMerging SwissIsoform features with gnomAD constraint...")
+    print("\nMerging SwissIsoform features with gnomAD v4.1 constraint...")
     print(f"  Features: {len(features_df)}")
     print(f"  gnomAD transcripts: {len(gnomad_df)}")
 
@@ -320,6 +355,10 @@ def main():
     output_dir = project_root / "data"
     output_dir.mkdir(exist_ok=True)
 
+    # Download gnomAD v4.1 if needed
+    gnomad_file = data_dir / "gnomad" / "gnomad.v4.1.constraint_metrics.tsv"
+    download_gnomad_v4(gnomad_file)
+
     # Load raw SwissIsoform data
     swissisoform_file = data_dir / "swissisoform" / "isoform_level_results_mane.csv"
     features_df = load_swissisoform_raw(swissisoform_file)
@@ -346,8 +385,7 @@ def main():
             + features_df["count_gnomad_frameshift_variant"]
         )
 
-    # Load gnomAD constraint
-    gnomad_file = data_dir / "gnomad" / "gnomad.v2.1.1.lof_metrics.by_gene.txt.bgz"
+    # Load gnomAD v4.1 constraint
     gnomad_df = load_gnomad_constraint(gnomad_file)
 
     # Merge

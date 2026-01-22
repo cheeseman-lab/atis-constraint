@@ -15,8 +15,8 @@ Following the approach from **Whiffin et al. 2024** (Genome Biology), we use:
 ## Dataset
 
 **Source**: SwissIsoform MANE isoform results
-- 4,817 aTIS features (3,006 extensions + 1,811 truncations)
-- gnomAD v2.1.1 variant counts and constraint metrics
+- 4,757 aTIS features (2,963 extensions + 1,794 truncations)
+- gnomAD v4.1 variant counts and constraint metrics (GRCh38)
 
 **Only essential columns retained**:
 - Identifiers: gene_name, transcript_id, feature_id, feature_type
@@ -46,20 +46,20 @@ See **[METHODS.md](METHODS.md)** for detailed methodology.
 
 ### Data Integration
 
-- **Transcript-based merge**: SwissIsoform features matched to gnomAD constraint metrics via Ensembl transcript IDs (version-stripped)
+- **Transcript-based merge**: SwissIsoform features matched to gnomAD v4.1 constraint metrics via Ensembl transcript IDs (version-stripped)
 - **Quality filters**: Requires gnomAD match, LOEUF score, valid lengths, complete constraint metrics
-- **Result**: 4,817 features from 2,828 genes with paired aTIS/canonical metrics
+- **Result**: 4,757 features from 2,593 genes across 2,950 transcripts with paired aTIS/canonical metrics
 
 ## Pipeline
 
 ```bash
-# 1. Prepare data (merge SwissIsoform aTIS features with gnomAD constraint)
+# 1. Prepare data (download gnomAD v4.1, merge with SwissIsoform features)
 python src/01_prepare_data.py
-# Output: data/merged_features.csv (4,817 features, 27 columns)
+# Output: data/merged_features.csv (4,757 features, 29 columns)
 
 # 2. Calculate constraint metrics (O/E ratios, densities, paired comparisons)
 python src/02_calculate_metrics.py
-# Output: data/features_with_metrics.csv (4,817 features with all metrics)
+# Output: data/features_with_metrics.csv (4,757 features with all metrics)
 
 # 3. Visualize distributions (exploratory plots)
 python src/03_plot_metrics.py
@@ -90,18 +90,20 @@ From visual inspection of distributions (`results/figures/`):
 
 ```
 data/
-├── merged_features.csv          # SwissIsoform + gnomAD merged (4,817 features, 27 columns)
-└── features_with_metrics.csv    # All calculated constraint metrics (4,817 features)
+├── gnomad/
+│   └── gnomad.v4.1.constraint_metrics.tsv  # Auto-downloaded (92MB)
+├── merged_features.csv          # SwissIsoform + gnomAD v4.1 merged (4,757 features, 29 columns)
+└── features_with_metrics.csv    # All calculated constraint metrics (4,757 features)
 
 results/figures/
-├── all/                         # Plots for all 4,817 features
+├── all/                         # Plots for all 4,757 features
 │   ├── 01_oe_distributions.png
 │   ├── 02_density_distributions.png
 │   ├── 03_oe_scatter.png
 │   └── 04_delta_distributions.png
-├── extensions/                  # Plots for 3,006 extensions
+├── extensions/                  # Plots for 2,963 extensions
 │   └── [same 4 plots]
-└── truncations/                 # Plots for 1,811 truncations
+└── truncations/                 # Plots for 1,794 truncations
     └── [same 4 plots]
 ```
 
@@ -110,7 +112,7 @@ results/figures/
 - **Methodology**: Inspired by Whiffin et al. 2024. "Differences in 5'untranslated regions highlight the importance of translational regulation of dosage sensitive genes." *Genome Biology* 25:111. [DOI: 10.1186/s13059-024-03248-0](https://doi.org/10.1186/s13059-024-03248-0)
 
 - **Data sources**:
-  - Karczewski KJ, Francioli LC, Tiao G, et al. (2020) The mutational constraint spectrum quantified from variation in 141,456 humans. *Nature* 581:434-443. [gnomAD v2.1.1]
+  - Chen S, Francioli LC, Goodrich JK, et al. (2024) A genome-wide mutational constraint map quantified from variation in 76,156 human genomes. *bioRxiv*. [gnomAD v4.1, GRCh38]
   - SwissIsoform MANE alternative isoform database
 
 - **Detailed methods**: See [METHODS.md](METHODS.md)
